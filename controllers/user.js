@@ -1,6 +1,7 @@
 const UserModel = require('../models/user');
 const {validationResult} = require('express-validator');
 const bcrypt = require('bcryptjs');
+const jwt = require ('jsonwebtoken');
 
 const signupController = (req, res) => {
 
@@ -23,39 +24,39 @@ const signupController = (req, res) => {
 }
 
 
-const signinController = (req, res) => {
-     
-    const errors = validationResult(req);
-    if(!errors.isEmpty()){
-        console.log(errors);
-        return res.json({message: errors.array()[0].msg});
-    }
-       
-       const {email, password} = req.body;
+const signinController = async (req, res) => {
+    
+     try {
+        const errors = validationResult(req);
+        if(!errors.isEmpty()){
+            return res.json({message: errors.array()[0].msg});
+        }  
 
-       //find the user with email in our db;
-       UserModel.findOne({email}).then( user => {
-           if (user){
-               //compare passwords
-               bcrypt.compare(password, user.password).then( result => {
-                 //
-                 if (result){
-                     return res.json({message: "User signed In"});
-                 } 
-                 return res.json({message: "Email and Password combination is Incorrect"});
-            }).catch(err => {
-                   console.log(err);
-                   return res.json({message: "Failed to sign in. Please try again"});
-                });
-           } else{
-                  return res.json({message: "User not found"});
-           }
-        }).catch(err => {
-           console.log(err);
-           res.json({message: "Server error. Please try again."});
-        });
+        const {email, password} = req.body;
 
-       //compare passwords
+        //find User
+       const user = await UserModel.findOne({email});
+
+       if(!user){
+        return res.json({message: "User not found"});
+       }
+
+        //compare passwords
+       const isAuth = await  bcrypt.compare(password, user.password);
+       if(!isAuth){
+            return res.json({message: "Email and Password combination is Incorrect"});
+       }
+        const token = jwt.sign(
+            {name: user.name, email: user.email, userId: user._id},
+             'supersecretkeythatcannotbeeasilyguessed',
+             {expiresIn: "1h"});   
+
+       return res.json({message: "User signed In", token });
+
+     } catch (error) {
+        res.json({message: "Server error. Please try again."});
+     }
+
 }
 
 module.exports = {
